@@ -15,7 +15,10 @@ import com.willfp.eco.core.items.builder.ItemStackBuilder
 import com.willfp.eco.core.placeholder.PlayerPlaceholder
 import com.willfp.eco.core.recipe.parts.EmptyTestableItem
 import com.willfp.eco.util.MenuUtils
+import com.willfp.ecomponent.menuStateVar
+import com.willfp.talismans.talismans.Talisman
 import com.willfp.talismans.talismans.util.TalismanChecks
+import com.willfp.talismans.talismans.util.TalismanUtils
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
@@ -23,9 +26,14 @@ import java.util.*
 import kotlin.math.ceil
 import kotlin.math.min
 
+private val Menu.talismanBag by menuStateVar<List<ItemStack>>(
+    emptyList()
+)
+
 object TalismanBag {
     private val menus = mutableMapOf<Int, Menu>()
     private lateinit var key: PersistentDataKey<List<String>>
+    private lateinit var emptyItem: ItemStack
 
     private val savedItems = mutableMapOf<UUID, List<ItemStack>>()
 
@@ -59,30 +67,39 @@ object TalismanBag {
             emptyList()
         )
 
+        emptyItem = ItemStackBuilder(Items.lookup(plugin.configYml.getString("bag.blocked-item")))
+            .addLoreLines(plugin.configYml.getStrings("bag.blocked-item-lore"))
+            .build()
+
         for (rows in 1..6) {
             menus[rows] = menu(rows) {
                 title = plugin.configYml.getFormattedString("bag.title")
 
                 for (row in 1..rows) {
                     for (column in 1..9) {
-                        setSlot(row, column, slot({ player, _ ->
+                        setSlot(row, column, slot({ player, menu ->
                             val bagSize = player.bagSize
 
-                            val inBag = player.profile.read(key).map { Items.lookup(it).item }
                             val index = MenuUtils.rowColumnToSlot(row, column)
 
                             if (index >= bagSize) {
-                                ItemStackBuilder(Items.lookup(plugin.configYml.getString("bag.blocked-item")))
-                                    .addLoreLines(plugin.configYml.getStrings("bag.blocked-item-lore"))
-                                    .build()
+                                emptyItem
                             } else {
-                                inBag.toList().getOrNull(index)?.clone() ?: ItemStack(Material.AIR)
+                                menu.talismanBag[player].getOrNull(index)?.clone() ?: ItemStack(Material.AIR)
                             }
                         }) {
                             setCaptive(true)
                             notCaptiveFor { MenuUtils.rowColumnToSlot(row, column) >= it.bagSize }
+
+                            setCaptiveFilter { _, _, itemStack ->
+                                TalismanChecks.getTalismanOnItem(itemStack) != null
+                            }
                         })
                     }
+                }
+
+                onOpen { player, menu ->
+                    menu.talismanBag[player] = player.profile.read(key).map { Items.lookup(it).item }
                 }
 
                 onRender { player, menu ->
