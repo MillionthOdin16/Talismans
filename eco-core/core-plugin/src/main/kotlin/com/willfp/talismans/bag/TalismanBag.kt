@@ -98,11 +98,11 @@ object TalismanBag {
                     }
                 }
 
-                onOpen { player, menu ->
-                    menu.talismanBag[player] = player.profile.read(key).map { Items.lookup(it).item }
-                }
-
                 onRender { player, menu ->
+                    if (menu.talismanBag[player].isEmpty()) {
+                        menu.talismanBag[player] = player.profile.read(key).map { Items.lookup(it).item }
+                    }
+
                     val items = menu.getCaptiveItems(player)
                         .filterNot { EmptyTestableItem().matches(it) }
 
